@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>رمضان كريم | اتجاه القبلة</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Tajawal:wght@300;400;500;700;800&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="js/main.js?v=darkmode1"></script>
+    <link rel="stylesheet" href="css/style.css?v=darkmode1">
+    <style>
+        .compass-container {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            margin: 0 auto;
+            border-radius: 50%;
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+            border: 4px solid rgba(251, 191, 36, 0.3);
+            box-shadow: 0 0 30px rgba(251, 191, 36, 0.1);
+            transition: transform 0.3s ease-out;
+        }
+
+        .kaaba-icon {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            font-size: 2rem;
+            color: #fbbf24;
+            filter: drop-shadow(0 0 5px rgba(251, 191, 36, 0.5));
+        }
+
+        .compass-arrow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 4px;
+            height: 45%;
+            background: red;
+            transform-origin: bottom center;
+            transform: translateX(-50%) translateY(-100%);
+            border-radius: 4px;
+            z-index: 5;
+        }
+
+        .compass-arrow::after {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: -6px;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 12px solid red;
+        }
+
+        .center-dot {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 20;
+        }
+
+        .degree-display {
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+
+<body class="bg-ramadan-dark text-white font-tajawal">
+    <div id="nav-placeholder"></div>
+
+    <section class="py-24 min-h-screen relative overflow-hidden flex flex-col items-center">
+        <!-- Background Elements -->
+        <div class="absolute inset-0 stars opacity-30"></div>
+        <div class="absolute inset-0 islamic-pattern opacity-10"></div>
+
+        <div class="container mx-auto px-4 relative z-10 text-center">
+            <h2 class="text-3xl lg:text-5xl font-bold mb-4 font-amiri text-white">اتجاه القبلة</h2>
+            <p class="text-gray-400 mb-8 max-w-lg mx-auto">
+                استخدم هذا البوصلة لتحديد اتجاه القبلة.
+                <br>
+                <span class="text-xs text-yellow-500"><i class="fas fa-exclamation-triangle"></i> للحصول على أفضل دقة،
+                    ابق هاتفك مسطحًا وابتعد عن المعادن.</span>
+            </p>
+
+            <!-- Permission Button (iOS mainly) -->
+            <button id="start-compass" onclick="initCompass()"
+                class="hidden mb-8 px-6 py-3 rounded-full bg-ramadan-gold text-ramadan-dark font-bold hover:bg-white transition-all">
+                <i class="fas fa-compass ml-2"></i> تفعيل البوصلة
+            </button>
+
+            <!-- Compass UI -->
+            <div id="compass-ui" class="hidden">
+                <div class="compass-container relative mb-8" id="compass-dial">
+                    <!-- Directions -->
+                    <div class="absolute top-2 left-1/2 -translate-x-1/2 text-gray-500 font-bold">N</div>
+                    <div class="absolute bottom-2 left-1/2 -translate-x-1/2 text-gray-500 font-bold">S</div>
+                    <div class="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 font-bold">W</div>
+                    <div class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 font-bold">E</div>
+
+                    <!-- Kaaba Icon (This rotates to point to Kaaba relative to North) -->
+                    <div id="kaaba-pointer" class="absolute inset-0 transition-transform duration-300">
+                        <div class="kaaba-icon"><i class="fas fa-kaaba"></i></div>
+                    </div>
+
+                    <!-- Center -->
+                    <div class="center-dot"></div>
+                </div>
+
+                <div class="glass-effect rounded-xl p-6 inline-block max-w-sm">
+                    <p class="text-sm text-gray-400">اتجاه الكعبة من موقعك:</p>
+                    <div class="text-3xl font-bold text-ramadan-gold my-2 degree-display" id="qibla-degree">--°</div>
+                    <p class="text-xs text-gray-500" id="status-msg">انتظار الموقع...</p>
+                </div>
+            </div>
+
+
+
+        </div>
+    </section>
+
+    <div id="footer-placeholder"></div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            injectNav('qibla');
+            injectFooter();
+
+            if (isIOS() && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                document.getElementById('start-compass').classList.remove('hidden');
+            } else {
+                initCompass();
+            }
+        });
+
+        let qiblaAngle = 0;
+
+        async function initCompass() {
+            document.getElementById('start-compass').classList.add('hidden');
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const { latitude, longitude } = position.coords;
+                        qiblaAngle = calculateQibla(latitude, longitude);
+
+                        // Show angle immediately
+                        document.getElementById('qibla-degree').textContent = Math.round(qiblaAngle) + '°';
+                        document.getElementById('status-msg').textContent = 'تم تحديد الزاوية';
+
+                        // Always show UI, but might be static on desktop
+                        document.getElementById('compass-ui').classList.remove('hidden');
+
+                        // Set static arrow first (assuming North is Up)
+                        const kaabaPointer = document.getElementById('kaaba-pointer');
+                        kaabaPointer.style.transform = `rotate(${qiblaAngle}deg)`;
+
+                        startSensor();
+                    },
+                    (err) => {
+                        console.error(err);
+                        Swal.fire({ title: 'خطأ', text: 'يرجى تفعيل الموقع لحساب اتجاه القبلة', icon: 'error' });
+                        document.getElementById('status-msg').textContent = 'الموقع غير مفعل';
+                    }
+                );
+            } else {
+                Swal.fire({ title: 'خطأ', text: 'المتصفح لا يدعم تحديد الموقع', icon: 'error' });
+            }
+        }
+
+        function startSensor() {
+            if (window.DeviceOrientationEvent) {
+                // iOS 13+ support
+                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    DeviceOrientationEvent.requestPermission()
+                        .then(response => {
+                            if (response === 'granted') {
+                                window.addEventListener('deviceorientation', handleOrientation);
+                            }
+                        })
+                        .catch(console.error);
+                } else {
+                    window.addEventListener('deviceorientationabsolute', handleOrientation); // Android
+                    window.addEventListener('deviceorientation', handleOrientation); // iOS
+                }
+            }
+        }
+
+        function handleOrientation(event) {
+            let compass = event.webkitCompassHeading || Math.abs(event.alpha - 360);
+
+            if (event.webkitCompassHeading) {
+                compass = event.webkitCompassHeading;
+            } else {
+                compass = 360 - event.alpha;
+            }
+
+            // Rotate the entire dial so "North" matches North
+            const dial = document.getElementById('compass-dial');
+            dial.style.transform = `rotate(${-compass}deg)`;
+
+            // Rotate the Kaaba icon to point to Qibla Angle relative to the dial
+            const kaabaPointer = document.getElementById('kaaba-pointer');
+            kaabaPointer.style.transform = `rotate(${qiblaAngle}deg)`;
+        }
+
+        function calculateQibla(lat, lng) {
+            const KAABA_LAT = 21.422487;
+            const KAABA_LNG = 39.826206;
+
+            const phiK = KAABA_LAT * Math.PI / 180.0;
+            const lambdaK = KAABA_LNG * Math.PI / 180.0;
+            const phi = lat * Math.PI / 180.0;
+            const lambda = lng * Math.PI / 180.0;
+
+            const y = Math.sin(lambdaK - lambda);
+            const x = Math.cos(phi) * Math.tan(phiK) - Math.sin(phi) * Math.cos(lambdaK - lambda);
+            let qibla = Math.atan2(y, x) * 180.0 / Math.PI;
+
+            return (qibla + 360) % 360;
+        }
+
+        function isIOS() {
+            return [
+                'iPad Simulator',
+                'iPhone Simulator',
+                'iPod Simulator',
+                'iPad',
+                'iPhone',
+                'iPod'
+            ].includes(navigator.platform)
+                || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
+        }
+    </script>
+</body>
+
+</html>
